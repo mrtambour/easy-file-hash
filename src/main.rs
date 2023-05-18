@@ -4,20 +4,25 @@ use std::path::PathBuf;
 use std::{fs, io};
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{text, Column};
+use iced::widget::{text, text_input, Column, Container, Space, Text};
 use iced::{executor, window, Application, Command, Element, Length, Settings, Theme};
 use iced_native::widget::container;
 use iced_native::{row, Alignment, Event, Subscription};
 use sha2::{Digest, Sha256};
 
+mod style;
+
 struct FileHash {
     file_path: PathBuf,
     hash: String,
+    user_hash: String,
+    hash_matches: bool,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     DroppedFile(Event),
+    InputChanged(String),
 }
 
 impl Application for FileHash {
@@ -31,6 +36,8 @@ impl Application for FileHash {
             FileHash {
                 file_path: PathBuf::new(),
                 hash: String::new(),
+                user_hash: String::new(),
+                hash_matches: false,
             },
             Command::none(),
         )
@@ -52,6 +59,12 @@ impl Application for FileHash {
                             io::copy(&mut file, &mut hash_algo).unwrap();
                             let finalized = hash_algo.finalize();
                             self.hash = hex::encode(finalized);
+
+                            if self.hash == self.user_hash {
+                                self.hash_matches = true
+                            } else {
+                                self.hash_matches = false
+                            }
                         }
                         Err(error) => {
                             println!("error opening file: {error}");
@@ -61,30 +74,61 @@ impl Application for FileHash {
                 }
                 Command::none()
             }
+            Message::InputChanged(input) => {
+                self.user_hash = input;
+
+                if self.hash == self.user_hash {
+                    self.hash_matches = true
+                } else {
+                    self.hash_matches = false
+                }
+
+                Command::none()
+            }
         }
     }
 
     fn view(&self) -> Element<Self::Message> {
+        let file_drop_area = Container::new(row![text("Drop File Here").size(40.0)])
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .height(100.0)
+            .padding(10)
+            .style(style::DropFileContainer);
+
+        let path_hash_text = Container::new(
+            Column::new()
+                .push(text(self.file_path.to_str().unwrap().to_string()).size(20.0))
+                .push(text(&self.hash))
+                .spacing(10.0)
+                .height(50.0),
+        )
+        .padding(15.0);
+
+        let compare_text = if self.hash_matches {
+            Text::new("Both hashes match!").height(20.0)
+        } else {
+            Text::new("Hashes do not match!").height(20.0)
+        };
+
         Column::new()
             .align_items(Alignment::Center)
-            .push(
-                container(row![text("Drop File Here").size(40.0)])
-                    .align_x(Horizontal::Center)
-                    .align_y(Vertical::Center)
-                    .height(100.0),
-            )
-            .push(
-                container(row![
-                    text(self.file_path.to_str().unwrap().to_string()).size(20.0)
-                ])
-                .align_x(Horizontal::Center)
-                .align_y(Vertical::Bottom)
-                .width(Length::Shrink)
-                .padding(10.0),
-            )
-            .push(container(text(&self.hash)).padding(10.0))
+            .push(Space::new(0, 50))
+            .push(file_drop_area)
+            .push(path_hash_text)
             .height(Length::Fill)
             .width(Length::Fill)
+            .push(
+                container(
+                    text_input("Input hash you want to compare..", &self.user_hash)
+                        .on_input(Message::InputChanged),
+                )
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Bottom)
+                .width(625)
+                .padding(10.0),
+            )
+            .push(container(compare_text).padding(10.0))
             .into()
     }
 
@@ -101,7 +145,7 @@ fn main() {
     println!("Easy File Hash");
     let settings = Settings {
         window: window::Settings {
-            size: (650, 200),
+            size: (650, 325),
             resizable: true,
             decorations: true,
 
