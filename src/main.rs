@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::{fs, io};
 
@@ -13,6 +14,7 @@ use sha2::{Digest, Sha256};
 mod style;
 
 struct FileHash {
+    file_name: String,
     file_path: PathBuf,
     hash: String,
     user_hash: String,
@@ -34,6 +36,7 @@ impl Application for FileHash {
     fn new(_flags: ()) -> (FileHash, Command<Message>) {
         (
             FileHash {
+                file_name: String::new(),
                 file_path: PathBuf::new(),
                 hash: String::new(),
                 user_hash: String::new(),
@@ -59,6 +62,12 @@ impl Application for FileHash {
                             io::copy(&mut file, &mut hash_algo).unwrap();
                             let finalized = hash_algo.finalize();
                             self.hash = hex::encode(finalized);
+
+                            if let Some(value) = self.file_path.file_name() {
+                                if let Some(name) = value.to_str() {
+                                    self.file_name = String::from(name)
+                                }
+                            }
 
                             if self.hash == self.user_hash {
                                 self.hash_matches = true
@@ -98,10 +107,12 @@ impl Application for FileHash {
 
         let path_hash_text = Container::new(
             Column::new()
-                .push(text(self.file_path.to_str().unwrap().to_string()).size(20.0))
+                .push(text(&self.file_name).size(20.0))
                 .push(text(&self.hash))
+                .align_items(Alignment::Center)
                 .spacing(10.0)
-                .height(50.0),
+                .height(50.0)
+                .width(625),
         )
         .padding(15.0);
 
